@@ -8,6 +8,10 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Stream;
 
+// https://codingchallenges.fyi/challenges/challenge-wc
+// The objective for this challenge is to recreate the wc command from Linux
+// This implementation only allows for one option at a time
+
 public class Main {
     public static void main(String[] args) {
         if (args.length == 0 || !args[args.length - 1].endsWith(".txt")) {

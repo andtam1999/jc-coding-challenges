@@ -1,0 +1,12 @@
+public enum TokenType {
+    COMMA,
+    COLON,
+    STRING,
+    NULL,
+    BOOLEAN,
+    SQUARE_BRACE_OPEN,
+    SQUARE_BRACE_CLOSE,
+    CURLY_BRACE_OPEN,
+    CURLY_BRACE_CLOSE,
+    NUMBER
+}

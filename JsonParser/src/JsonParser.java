@@ -15,7 +15,7 @@ public class JsonParser {
 
         for (int i = 0; i < trimmedString.length(); i++) {
             char currentChar = trimmedString.charAt(i);
-            if (currentChar == ' ') continue;
+            if (Character.isWhitespace(currentChar)) continue;
             else if (currentChar == '{') tokens.add(new Token(TokenType.CURLY_BRACE_OPEN, '{'));
             else if (currentChar == '}') tokens.add(new Token(TokenType.CURLY_BRACE_CLOSE, '}'));
             else if (currentChar == '[') tokens.add(new Token(TokenType.SQUARE_BRACE_OPEN, '['));
@@ -23,53 +23,58 @@ public class JsonParser {
             else if (currentChar == ',') tokens.add(new Token(TokenType.COMMA, ','));
             else if (currentChar == ':') tokens.add(new Token(TokenType.COLON, ':'));
             else if (currentChar == '\"') {
-                String word = "";
+                StringBuilder word = new StringBuilder();
                 i++;
-                while (trimmedString.charAt(i) != '\"' && trimmedString.charAt(i - 1) != '\\') {
-                    word += trimmedString.charAt(i);
+                while (!(trimmedString.charAt(i) == '"' && trimmedString.charAt(i - 1) != '\\')) {
+                    word.append(trimmedString.charAt(i));
                     i++;
                 }
-                tokens.add(new Token(TokenType.STRING, word));
+                tokens.add(new Token(TokenType.STRING, word.toString()));
             }
             else if (currentChar == 'n' || currentChar == 'N') {
-                if (i + 4 >= trimmedString.length()) {
+                if (i + 4 > trimmedString.length()) {
                     throw new InvalidJsonException("Attempted to find null at index " + i);
                 }
                 if (trimmedString.substring(i, i + 4).equalsIgnoreCase("null")) {
                     tokens.add(new Token(TokenType.NULL, null));
-                    i += 4;
+                    i += 3;
                 }
             }
             else if (currentChar == 't' || currentChar == 'T') {
-                if (i + 4 >= trimmedString.length()) {
+                if (i + 4 > trimmedString.length()) {
                     throw new InvalidJsonException("Attempted to find true at index " + i);
                 }
                 if (trimmedString.substring(i, i + 4).equalsIgnoreCase("true")) {
                     tokens.add(new Token(TokenType.BOOLEAN, true));
-                    i += 4;
+                    i += 3;
                 }
             }
             else if (currentChar == 'f' || currentChar == 'F') {
-                if (i + 5 >= trimmedString.length()) {
+                if (i + 5 > trimmedString.length()) {
                     throw new InvalidJsonException("Attempted to find false at index " + i);
                 }
                 if (trimmedString.substring(i, i + 5).equalsIgnoreCase("false")) {
                     tokens.add(new Token(TokenType.BOOLEAN, false));
-                    i += 5;
+                    i += 4;
                 }
             }
+            // currently does not handle exponents (ex. 1e+5)
             else if (Character.isDigit(currentChar) || currentChar == '-') {
-                String number = "";
+                StringBuilder number = new StringBuilder();
                 if (currentChar == '-') {
-                    number += '-';
+                    number.append('-');
                     i++;
                 }
                 while (Character.isDigit(trimmedString.charAt(i)) || trimmedString.charAt(i) == '.') {
-                    number += trimmedString.charAt(i);
+                    number.append(trimmedString.charAt(i));
                     i++;
                 }
                 i--; // decrement index for comma
-                tokens.add(new Token(TokenType.NUMBER, Double.parseDouble(number)));
+                try {
+                    tokens.add(new Token(TokenType.NUMBER, Double.parseDouble(number.toString())));
+                } catch (NumberFormatException e) {
+                    throw new InvalidJsonException("Invalid number near index " + i);
+                }
             }
         }
         return tokens;
@@ -80,8 +85,8 @@ public class JsonParser {
     public static HashMap<String, Object> parseJson(String jsonString) {
         try {
             List<Token> tokens = tokenize(jsonString);
-            if (tokens.getFirst().Type != TokenType.CURLY_BRACE_OPEN ||
-                    tokens.getLast().Type != TokenType.CURLY_BRACE_CLOSE) {
+            if (tokens.getFirst().getType() != TokenType.CURLY_BRACE_OPEN ||
+                    tokens.getLast().getType() != TokenType.CURLY_BRACE_CLOSE) {
                 throw new InvalidJsonException("Invalid JSON");
             }
             Iterator<Token> tokenIterator = tokens.iterator();
@@ -92,24 +97,25 @@ public class JsonParser {
         return null;
     }
 
+    // TODO: add checks for commas to ensure valid JSON
     private static HashMap<String, Object> parseObject(Iterator<Token> tokenIterator) {
         HashMap<String, Object> jsonMap = new HashMap<>();
         Token currentToken = tokenIterator.next();
-        while (currentToken.Type != TokenType.CURLY_BRACE_CLOSE) {
-            if (currentToken.Type == TokenType.STRING && tokenIterator.next().Type == TokenType.COLON) {
+        while (currentToken.getType() != TokenType.CURLY_BRACE_CLOSE) {
+            if (currentToken.getType() == TokenType.STRING && tokenIterator.next().getType() == TokenType.COLON) {
                 Token valueToken = tokenIterator.next();
-                if (valueToken.Type == TokenType.SQUARE_BRACE_OPEN) {
-                    jsonMap.put(currentToken.Value.toString(), parseArray(tokenIterator));
+                if (valueToken.getType() == TokenType.SQUARE_BRACE_OPEN) {
+                    jsonMap.put(currentToken.getValue().toString(), parseArray(tokenIterator));
                 }
-                else if (valueToken.Type == TokenType.CURLY_BRACE_OPEN) {
-                    jsonMap.put(currentToken.Value.toString(), parseObject(tokenIterator));
+                else if (valueToken.getType() == TokenType.CURLY_BRACE_OPEN) {
+                    jsonMap.put(currentToken.getValue().toString(), parseObject(tokenIterator));
                 }
-                else if (valueToken.Type == TokenType.STRING || valueToken.Type == TokenType.NUMBER ||
-                        valueToken.Type == TokenType.BOOLEAN || valueToken.Type == TokenType.NULL) {
-                    jsonMap.put(currentToken.Value.toString(), valueToken.Value);
+                else if (valueToken.getType() == TokenType.STRING || valueToken.getType() == TokenType.NUMBER ||
+                        valueToken.getType() == TokenType.BOOLEAN || valueToken.getType() == TokenType.NULL) {
+                    jsonMap.put(currentToken.getValue().toString(), valueToken.getValue());
                 }
                 else {
-                    throw new InvalidJsonException("Invalid value for key " + currentToken.Value);
+                    throw new InvalidJsonException("Invalid value for key " + currentToken.getValue());
                 }
             }
             currentToken = tokenIterator.next();
@@ -120,8 +126,10 @@ public class JsonParser {
     private static List<Object> parseArray(Iterator<Token> tokenIterator) {
         List<Object> tokenArray = new ArrayList<>();
         Token currentToken = tokenIterator.next();
-        while (currentToken.Type != TokenType.SQUARE_BRACE_CLOSE) {
-            tokenArray.add(currentToken.Value);
+        while (currentToken.getType() != TokenType.SQUARE_BRACE_CLOSE) {
+            if (currentToken.getType() != TokenType.COMMA) {
+                tokenArray.add(currentToken.getValue());
+            }
             currentToken = tokenIterator.next();
         }
         return tokenArray;
